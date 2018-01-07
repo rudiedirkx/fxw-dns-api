@@ -1,3 +1,4 @@
 /vendor/
 /env.php
-/dns.html
+/*.html
+/dns-wait.php

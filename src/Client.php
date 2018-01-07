@@ -18,16 +18,92 @@ class Client {
 	public $base = 'https://cp.flexwebhosting.nl';
 	public $auth; // rdx\fxwdns\WebAuth
 	public $guzzle; // GuzzleHttp\Client
-
 	public $customer; // rdx\fxwdns\Customer
+	public $uri; // rdx\fxwdns\UriGen
+	public $domains = [];
 
 	/**
 	 * Dependency constructor
 	 */
 	public function __construct( WebAuth $auth ) {
 		$this->auth = $auth;
+		$this->uri = new UriGen;
 
 		$this->setUpGuzzle();
+	}
+
+	/**
+	 *
+	 */
+	public function deleteDnsRecord( Domain $domain, DnsRecord $record ) {
+		$rsp = $this->guzzle->request('GET', $this->uri->preDeleteDnsRecord($domain, $record));
+
+		$rsp = $this->guzzle->request('POST', $this->uri->deleteDnsRecord($domain, $record), [
+			'form_params' => [
+				'objectId' => '',
+				'dnsDomainId' => $domain->id,
+				'dnsRecordId' => $record->id,
+				'name' => $record->name,
+				'value' => $record->value,
+				'type' => $record->type,
+				'prio' => $record->prio,
+			],
+		]);
+
+		$oldRecords = $domain->records;
+
+		$html = (string) $rsp->getBody();
+		$domain->records = $this->scrapeDnsRecords($html);
+
+		return strpos($html, 'succesvol verwijderd') !== false && count($oldRecords) == count($domain->records) + 1;
+	}
+
+	/**
+	 *
+	 */
+	public function getDnsRecords( Domain $domain ) {
+		$rsp = $this->guzzle->request('GET', $this->uri->editDomainDns($domain));
+		$html = (string) $rsp->getBody();
+
+		return $domain->records = $this->scrapeDnsRecords($html);
+	}
+
+	/**
+	 *
+	 */
+	protected function scrapeDnsRecords( $html ) {
+		$doc = Node::create($html);
+		$rows = $doc->queryAll('form#addNewDnsRecord tbody tr');
+
+		$records = [];
+		foreach ( $rows as $row ) {
+			$td = $row->child('td:first-child');
+			if ( !$td ) break;
+
+			if ( !preg_match('#/dns/editShow(?:Direct)?/(\d+)/\d+#', $row->innerHTML, $match) ) break;
+
+			$id = $match[1];
+			$name = $td->textContent;
+
+			$td = $td->nextElementSibling;
+			$type = $td->textContent;
+
+			$td = $td->nextElementSibling;
+			$value = $td->textContent;
+			if ( $type == 'TXT' ) {
+				$value = trim($value, '"');
+			}
+
+			$td = $td->nextElementSibling;
+			$prio = $td->textContent;
+
+			$td = $td->nextElementSibling;
+			$ttl = $td->textContent;
+
+			$records[] = new DnsRecord($id, $name, $type, $value, $prio, $ttl);
+		}
+
+		return $records;
 	}
 
 	/**
@@ -37,8 +113,16 @@ class Client {
 		$rsp = $this->guzzle->request('GET', '/dns');
 		$html = (string) $rsp->getBody();
 
+		return $this->domains = $this->scrapeDomains($html);
+	}
+
+	/**
+	 *
+	 */
+	protected function scrapeDomains( $html ) {
 		$doc = Node::create($html);
-		$rows = $doc->queryAll('.product table tbody tr');
+		$rows = $doc->queryAll('.product tbody tr');
+
 		$domains = [];
 		foreach ( $rows as $row ) {
 			if ( preg_match('#/dns/show(Direct)?/(\d+)#', $row->innerHTML, $match) ) {

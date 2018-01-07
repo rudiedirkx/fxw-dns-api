@@ -10,7 +10,8 @@ class UriGen {
 	}
 
 	public function insertDnsRecord( Domain $domain ) {
-		return "/dns/add";
+		$add = $domain->direct ? 'addDirect' : 'add';
+		return "/dns/$add";
 	}
 
 	public function editDnsRecord( Domain $domain, DnsRecord $record ) {

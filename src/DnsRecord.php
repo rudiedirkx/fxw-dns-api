@@ -8,16 +8,16 @@ class DnsRecord {
 	public $name;
 	public $type;
 	public $value;
-	public $prio;
 	public $ttl;
+	public $prio;
 
-	public function __construct( $id, $name, $type, $value, $prio, $ttl ) {
+	public function __construct( $id, $name, $type, $value, $ttl, $prio = '' ) {
 		$this->id = $id;
-		$this->name = $name;
-		$this->type = $type;
+		$this->name = strtolower($name);
+		$this->type = strtoupper($type);
 		$this->value = $value;
-		$this->prio = $prio;
 		$this->ttl = $ttl;
+		$this->prio = $prio;
 	}
 
 }

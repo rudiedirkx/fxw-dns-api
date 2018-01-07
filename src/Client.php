@@ -35,6 +35,37 @@ class Client {
 	/**
 	 *
 	 */
+	public function addDnsRecord( Domain $domain, DnsRecord $record ) {
+		$name = preg_replace('#\.' . preg_quote($domain->name, '#') . '$#', '', $record->name);
+		if ( $name == $record->name ) {
+			return false;
+		}
+
+		$oldRecords = $this->getDnsRecords($domain);
+
+		$rsp = $this->guzzle->request('POST', $this->uri->insertDnsRecord($domain), [
+			'form_params' => [
+				'name' => $name,
+				'dnsNewType' => $record->type,
+				'value' => $record->value,
+				'prio' => $record->prio,
+				'ttl' => $record->ttl,
+				'objectId' => '',
+				'dnsDomainId' => $domain->id,
+				'coreDomainId' => '',
+				'domainName' => $domain->name,
+			],
+		]);
+
+		$html = (string) $rsp->getBody();
+		$domain->records = $this->scrapeDnsRecords($html);
+
+		return strpos($html, 'succesvol toegevoegd') !== false && count($oldRecords) == count($domain->records) - 1;
+	}
+
+	/**
+	 *
+	 */
 	public function deleteDnsRecord( Domain $domain, DnsRecord $record ) {
 		$rsp = $this->guzzle->request('GET', $this->uri->preDeleteDnsRecord($domain, $record));
 
@@ -100,10 +131,20 @@ class Client {
 			$td = $td->nextElementSibling;
 			$ttl = $td->textContent;
 
-			$records[] = new DnsRecord($id, $name, $type, $value, $prio, $ttl);
+			$records[] = new DnsRecord($id, $name, $type, $value, $ttl, $prio);
 		}
 
 		return $records;
+	}
+
+	/**
+	 *
+	 */
+	public function getDomain( $wanted ) {
+		$domains = $this->domains ?: $this->getDomains();
+		return array_reduce($domains, function($result, Domain $domain) use ($wanted) {
+			return $domain->name === $wanted ? $domain : $result;
+		}, null);
 	}
 
 	/**

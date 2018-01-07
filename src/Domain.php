@@ -5,13 +5,13 @@ namespace rdx\fxwdns;
 class Domain {
 
 	public $id;
-	public $domain;
+	public $name;
 	public $direct;
 	public $records = [];
 
-	public function __construct( $id, $domain, $direct ) {
+	public function __construct( $id, $name, $direct ) {
 		$this->id = $id;
-		$this->domain = $domain;
+		$this->name = strtolower($name);
 		$this->direct = $direct;
 	}
 

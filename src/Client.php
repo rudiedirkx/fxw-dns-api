@@ -92,6 +92,22 @@ class Client {
 	/**
 	 *
 	 */
+	public function findDnsRecords( Domain $domain, array $conditions ) {
+		$records = $domain->records ?: $this->getDnsRecords($domain);
+
+		return array_filter($records, function(DnsRecord $record) use ($conditions) {
+			foreach ( $conditions as $prop => $propValue ) {
+				if ( $record->$prop != $propValue ) {
+					return false;
+				}
+			}
+			return true;
+		});
+	}
+
+	/**
+	 *
+	 */
 	public function getDnsRecords( Domain $domain ) {
 		$rsp = $this->guzzle->request('GET', $this->uri->editDomainDns($domain));
 		$html = (string) $rsp->getBody();

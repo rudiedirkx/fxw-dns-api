@@ -24,13 +24,12 @@ var_dump($domain);
 
 if ( !$domain ) return;
 
-$records = $client->getDnsRecords($domain);
-// print_r($records);
-// exit;
+$txtRecords = $client->findDnsRecords($domain, ['type' => 'TXT']);
 
-$delete = array_reduce($records, function($result, fxwdns\DnsRecord $record) {
-	return preg_match('#^dns\d+\.#', $record->name) ? $record : $result;
-}, null);
+$delete = array_filter($txtRecords, function(fxwdns\DnsRecord $record) {
+	return preg_match('#(^|\.)dns\d+\.#', $record->name) > 0;
+});
+$delete = $delete ? $delete[ array_rand($delete) ] : null;
 var_dump($delete);
 
 if ( $delete ) {

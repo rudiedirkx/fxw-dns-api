@@ -10,6 +10,8 @@ use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use GuzzleHttp\RedirectMiddleware;
+use InvalidArgumentException;
+use RuntimeException;
 use rdx\fxwdns\WebAuth;
 use rdx\jsdom\Node;
 
@@ -38,7 +40,7 @@ class Client {
 	public function addDnsRecord( Domain $domain, DnsRecord $record ) {
 		$name = preg_replace('#\.' . preg_quote($domain->name, '#') . '$#', '', $record->name);
 		if ( $name == $record->name ) {
-			return false;
+			throw new InvalidArgumentException("Wrong domain name format.");
 		}
 
 		$oldRecords = $this->getDnsRecords($domain);
@@ -50,17 +52,25 @@ class Client {
 				'value' => $record->value,
 				'prio' => $record->prio,
 				'ttl' => $record->ttl,
-				'objectId' => '',
-				'dnsDomainId' => $domain->id,
-				'coreDomainId' => '',
+				'objectId' => $domain->objectId ?: '',
+				'dnsDomainId' => $domain->dnsDomainId ? $domain->dnsDomainId : $domain->id,
+				'coreDomainId' => $domain->dnsDomainId ? $domain->id : '',
 				'domainName' => $domain->name,
 			],
 		]);
 
 		$html = (string) $rsp->getBody();
-		$domain->records = $this->scrapeDnsRecords($html);
+		$domain->records = $this->scrapeDnsRecords(Node::create($html));
 
-		return strpos($html, 'succesvol toegevoegd') !== false && count($oldRecords) == count($domain->records) - 1;
+		if ( strpos($html, 'succesvol toegevoegd') === false ) {
+			throw new RuntimeException("Can't verify success message.");
+		}
+
+		if ( count($oldRecords) + 1 != count($domain->records) ) {
+			throw new RuntimeException("New record count (" . count($domain->records) . ") doesn't match with old (" . count($oldRecords) . ").");
+		}
+
+		return true;
 	}
 
 	/**
@@ -71,8 +81,8 @@ class Client {
 
 		$rsp = $this->guzzle->request('POST', $this->uri->deleteDnsRecord($domain, $record), [
 			'form_params' => [
-				'objectId' => '',
-				'dnsDomainId' => $domain->id,
+				'objectId' => $domain->objectId ?: '',
+				'dnsDomainId' => $domain->dnsDomainId ? $domain->dnsDomainId : $domain->id,
 				'dnsRecordId' => $record->id,
 				'name' => $record->name,
 				'value' => $record->value,
@@ -84,9 +94,17 @@ class Client {
 		$oldRecords = $domain->records;
 
 		$html = (string) $rsp->getBody();
-		$domain->records = $this->scrapeDnsRecords($html);
+		$domain->records = $this->scrapeDnsRecords(Node::create($html));
 
-		return strpos($html, 'succesvol verwijderd') !== false && count($oldRecords) == count($domain->records) + 1;
+		if ( strpos($html, 'succesvol verwijderd') === false ) {
+			throw new RuntimeException("Can't verify success message.");
+		}
+
+		if ( count($oldRecords) - 1 != count($domain->records) ) {
+			throw new RuntimeException("New record count (" . count($domain->records) . ") doesn't match with old (" . count($oldRecords) . ").");
+		}
+
+		return true;
 	}
 
 	/**
@@ -111,15 +129,36 @@ class Client {
 	public function getDnsRecords( Domain $domain ) {
 		$rsp = $this->guzzle->request('GET', $this->uri->editDomainDns($domain));
 		$html = (string) $rsp->getBody();
+		$doc = Node::create($html);
 
-		return $domain->records = $this->scrapeDnsRecords($html);
+		list($objectId, $dnsDomainId, $coreDomainId) = $this->scrapeDomainIds($doc);
+		if ( $objectId && $dnsDomainId && $coreDomainId ) {
+			$domain->objectId = $objectId;
+			$domain->dnsDomainId = $dnsDomainId;
+		}
+
+		return $domain->records = $this->scrapeDnsRecords($doc);
 	}
 
 	/**
 	 *
 	 */
-	protected function scrapeDnsRecords( $html ) {
-		$doc = Node::create($html);
+	protected function scrapeDomainIds( Node $doc ) {
+		$objectId = $doc->query('input[name="objectId"]');
+		$dnsDomainId = $doc->query('input[name="dnsDomainId"]');
+		$coreDomainId = $doc->query('input[name="coreDomainId"]');
+
+		return [
+			$objectId ? trim($objectId['value']) : '',
+			$dnsDomainId ? trim($dnsDomainId['value']) : '',
+			$coreDomainId ? trim($coreDomainId['value']) : '',
+		];
+	}
+
+	/**
+	 *
+	 */
+	protected function scrapeDnsRecords( Node $doc ) {
 		$rows = $doc->queryAll('form#addNewDnsRecord tbody tr');
 
 		$records = [];

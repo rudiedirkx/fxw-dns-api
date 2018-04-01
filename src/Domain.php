@@ -5,6 +5,8 @@ namespace rdx\fxwdns;
 class Domain {
 
 	public $id;
+	public $objectId;
+	public $dnsDomainId;
 	public $name;
 	public $direct;
 	public $records = [];

@@ -26,7 +26,8 @@ class UriGen {
 
 	public function preDeleteDnsRecord( Domain $domain, DnsRecord $record ) {
 		$deleteShow = $domain->direct ? 'deleteShowDirect' : 'deleteShow';
-		return "/dns/$deleteShow/{$record->id}/{$domain->id}";
+		$id = $domain->objectId ?: $domain->id;
+		return "/dns/$deleteShow/{$record->id}/{$id}";
 	}
 
 	public function deleteDnsRecord( Domain $domain, DnsRecord $record ) {

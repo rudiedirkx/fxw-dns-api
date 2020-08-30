@@ -4,7 +4,7 @@
     "type": "library",
     "require": {
         "guzzlehttp/guzzle": "^6.3",
-        "rdx/js-dom": "^1.1"
+        "rdx/js-dom": "dev-master"
     },
     "autoload": {
         "psr-4": {
